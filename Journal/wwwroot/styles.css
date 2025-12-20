@@ -1,0 +1,17 @@
+/* Basic layout styling for the Journal UI (frontend only) */
+
+body {
+    min-height: 100vh;
+}
+
+.card-header {
+    font-weight: 600;
+}
+
+.list-group-item h5 {
+    font-weight: 600;
+}
+
+textarea {
+    resize: vertical;
+}

@@ -1,0 +1,88 @@
+@page "/editor"
+@using Journal.Models
+@using Journal.Services
+@inject JournalService JournalService
+
+<h2>Today's Journal Entry</h2>
+
+@if (_saved)
+{
+    <p class="text-success">Entry saved successfully.</p>
+}
+
+<div class="card p-3">
+    <div class="mb-3">
+        <label class="form-label">Title</label>
+        <input class="form-control" @bind="entry.Title" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Content</label>
+        <textarea class="form-control" rows="6" @bind="entry.Content"></textarea>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Primary Mood *</label>
+        <select class="form-select" @bind="SelectedMoodName">
+            <option value="">-- Select Mood --</option>
+            @foreach(var mood in AvailableMoods)
+            {
+                <option value="@mood.Name">@mood.Emoji @mood.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <button class="btn btn-primary" @onclick="Save">Save / Update</button>
+        <button class="btn btn-danger" @onclick="Delete">Delete</button>
+    </div>
+
+    @if (entry.CreatedAt != default)
+    {
+        <p class="text-muted small">
+            Created: @entry.CreatedAt <br />
+            Updated: @entry.UpdatedAt
+        </p>
+    }
+</div>
+
+@code {
+    JournalEntry entry = new() { Date = DateTime.Today };
+    bool _saved = false;
+    List<Mood> AvailableMoods = new();
+    
+    private string SelectedMoodName
+    {
+        get => entry.PrimaryMood?.Name ?? "";
+        set => entry.PrimaryMood = AvailableMoods.FirstOrDefault(m => m.Name == value);
+    }
+
+    protected override void OnInitialized()
+    {
+        AvailableMoods = JournalService.GetAvailableMoods();
+        var today = JournalService.GetEntryByDate(DateTime.Today);
+        if (today != null)
+        {
+            entry = today;
+        }
+    }
+
+    void Save()
+    {
+        if (entry.PrimaryMood == null)
+            return;
+
+        JournalService.SaveEntry(entry);
+        _saved = true;
+    }
+
+    void Delete()
+    {
+        if (entry.Id != Guid.Empty)
+        {
+            JournalService.DeleteEntry(entry.Id);
+            entry = new JournalEntry { Date = DateTime.Today };
+            _saved = false;
+        }
+    }
+}

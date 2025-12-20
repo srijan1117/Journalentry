@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace Journal
 {
@@ -15,6 +15,8 @@ namespace Journal
                 });
 
             builder.Services.AddMauiBlazorWebView();
+            builder.Services.AddSingleton<JournalService>();
+            builder.Services.AddSingleton<AuthService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();

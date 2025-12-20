@@ -1,0 +1,133 @@
+@page "/calendar"
+@using Journal.Models
+@using Journal.Services
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <button class="btn btn-outline-secondary" @onclick="PrevMonth">&lt; Previous</button>
+        <h3>@CurrentMonth.ToString("MMMM yyyy")</h3>
+        <button class="btn btn-outline-secondary" @onclick="NextMonth">Next &gt;</button>
+    </div>
+
+    <div class="calendar-grid">
+        <div class="row text-center fw-bold mb-2">
+            <div class="col">Sun</div>
+            <div class="col">Mon</div>
+            <div class="col">Tue</div>
+            <div class="col">Wed</div>
+            <div class="col">Thu</div>
+            <div class="col">Fri</div>
+            <div class="col">Sat</div>
+        </div>
+        
+        @for (int week = 0; week < Weeks.Count; week++)
+        {
+            <div class="row mb-2">
+                @foreach (var day in Weeks[week])
+                {
+                    <div class="col border p-2 text-center position-relative" 
+                         style="height: 100px; cursor: pointer; background-color: @(day.Date.Date == DateTime.Today ? "#e8f4fd" : (day.IsCurrentMonth ? "white" : "#f8f9fa")); opacity: @(day.IsCurrentMonth ? "1" : "0.6")"
+                         @onclick="() => SelectDate(day.Date)">
+                        
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold small">@day.Date.Day</span>
+                            @if (day.HasEntry)
+                            {
+                                <span class="badge bg-success rounded-circle p-1" style="width: 8px; height: 8px;"> </span>
+                            }
+                        </div>
+                        
+                        @if (day.HasEntry)
+                        {
+                            <div class="mt-2">
+                                <div style="font-size: 1.5rem;">@day.MoodEmoji</div>
+                                <div class="small text-truncate text-muted" style="font-size: 0.7rem;">
+                                    @day.EntryTitle
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private DateTime CurrentMonth = DateTime.Today;
+    private List<List<CalendarDay>> Weeks = new();
+
+    protected override void OnInitialized()
+    {
+        GenerateCalendar();
+    }
+
+    private void PrevMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(-1);
+        GenerateCalendar();
+    }
+
+    private void NextMonth()
+    {
+        CurrentMonth = CurrentMonth.AddMonths(1);
+        GenerateCalendar();
+    }
+
+    private void GenerateCalendar()
+    {
+        Weeks = new List<List<CalendarDay>>();
+        var firstDayOfMonth = new DateTime(CurrentMonth.Year, CurrentMonth.Month, 1);
+        var daysInMonth = DateTime.DaysInMonth(CurrentMonth.Year, CurrentMonth.Month);
+        var startDayOfWeek = (int)firstDayOfMonth.DayOfWeek;
+        
+        var currentDay = firstDayOfMonth.AddDays(-startDayOfWeek);
+        
+        // Ensure we cover enough weeks to fill the grid (usually 5 or 6)
+        // We'll just generate until we are out of the month and completed the week
+        bool done = false;
+        
+        while (!done)
+        {
+            var week = new List<CalendarDay>();
+            for (int j = 0; j < 7; j++)
+            {
+                var entry = JournalService.GetEntryByDate(currentDay);
+                week.Add(new CalendarDay
+                {
+                    Date = currentDay,
+                    IsCurrentMonth = currentDay.Month == CurrentMonth.Month,
+                    HasEntry = entry != null,
+                    EntryTitle = entry?.Title ?? "",
+                    MoodEmoji = entry?.PrimaryMood?.Emoji ?? ""
+                });
+                
+                // Check if we are done (if currentDay is last day of week AND we are past current month)
+                if (j == 6 && currentDay.Month != CurrentMonth.Month && currentDay > firstDayOfMonth)
+                {
+                    done = true;
+                }
+                
+                currentDay = currentDay.AddDays(1);
+            }
+            Weeks.Add(week);
+            if (Weeks.Count >= 6) done = true; // Safety break
+        }
+    }
+
+    private void SelectDate(DateTime date)
+    {
+        Navigation.NavigateTo($"/?date={date:yyyy-MM-dd}");
+    }
+
+    class CalendarDay
+    {
+        public DateTime Date { get; set; }
+        public bool IsCurrentMonth { get; set; }
+        public bool HasEntry { get; set; }
+        public string EntryTitle { get; set; } = "";
+        public string MoodEmoji { get; set; } = "";
+    }
+}

@@ -1,0 +1,44 @@
+@using Journal.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<div class="d-flex justify-content-center align-items-center vh-100 bg-light" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000;">
+    <div class="card shadow p-4" style="width: 350px;">
+        <h3 class="text-center mb-4">Journal Login</h3>
+        
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input class="form-control" @bind="username" placeholder="admin" />
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" @bind="password" placeholder="test" />
+        </div>
+
+        <button class="btn btn-primary w-100" @onclick="HandleLogin">Login</button>
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string password = "";
+    private string errorMessage = "";
+
+    private void HandleLogin()
+    {
+        if (AuthService.Login(username, password))
+        {
+            errorMessage = "";
+        }
+        else
+        {
+            errorMessage = "Invalid credentials";
+        }
+    }
+}

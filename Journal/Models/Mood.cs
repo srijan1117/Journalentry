@@ -4,5 +4,7 @@ namespace Journal.Models
     {
         public string Name { get; set; } = string.Empty;
         public string Emoji { get; set; } = string.Empty;
+
+        public MoodCategory Category { get; set; }
     }
 }

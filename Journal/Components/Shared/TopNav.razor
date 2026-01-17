@@ -1,0 +1,103 @@
+﻿@using Microsoft.AspNetCore.Components.Routing
+@using Journal.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<nav class="top-nav">
+    <div class="nav-left">
+        <span class="app-title">Journal</span>
+    </div>
+
+    <div class="nav-center">
+        <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
+            Home
+        </NavLink>
+        <NavLink href="/calendar" class="nav-link">
+            Calendar
+        </NavLink>
+    </div>
+
+    <div class="nav-right">
+        <button class="logout-btn" @onclick="Logout">
+            Logout
+        </button>
+    </div>
+</nav>
+
+<style>
+    .top-nav {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid #e5e5e5;
+        background: #ffffff;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+
+    .nav-left {
+        justify-self: start;
+    }
+
+    .nav-center {
+        justify-self: center;
+        display: flex;
+        gap: 16px;
+    }
+
+    .nav-right {
+        justify-self: end;
+    }
+
+    .app-title {
+        font-weight: bold;
+        font-size: 20px;
+    }
+
+    .nav-link {
+        text-decoration: none;
+        color: #333;
+        padding: 6px 10px;
+        border-radius: 6px;
+    }
+
+        .nav-link.active {
+            background: #efefef;
+            font-weight: 600;
+        }
+
+    .logout-btn {
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 6px 10px;
+        cursor: pointer;
+    }
+
+    @@media (max-width: 600px) {
+        .top-nav {
+            grid-template-columns: 1fr;
+            gap: 10px;
+            justify-items: center;
+        }
+
+        .nav-left, .nav-right {
+            justify-self: center;
+        }
+
+        .nav-center {
+            width: 100%;
+            justify-content: space-between;
+        }
+    }
+</style>
+
+@code {
+    private void Logout()
+    {
+        AuthService.Logout();
+        Navigation.NavigateTo("/login");
+    }
+}

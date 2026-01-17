@@ -1,3 +1,6 @@
+using Journal.Data;
+using Microsoft.EntityFrameworkCore;
+using Journal.Services;
 using Microsoft.Extensions.Logging;
 
 namespace Journal
@@ -15,12 +18,17 @@ namespace Journal
                 });
 
             builder.Services.AddMauiBlazorWebView();
+
+            var dbPath = Path.Combine(FileSystem.AppDataDirectory, "journal.db");
+            builder.Services.AddDbContext<AppDbContext>(options =>
+                options.UseSqlite($"Filename={dbPath}"));
+
             builder.Services.AddSingleton<JournalService>();
             builder.Services.AddSingleton<AuthService>();
 
 #if DEBUG
-    		builder.Services.AddBlazorWebViewDeveloperTools();
-    		builder.Logging.AddDebug();
+            builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Logging.AddDebug();
 #endif
 
             return builder.Build();

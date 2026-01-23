@@ -11,7 +11,13 @@
         <button class="btn btn-outline-secondary" @onclick="NextDay" disabled="@IsFutureDate">Next &gt;</button>
     </div>
 
-    @if (CurrentEntry == null)
+    @if (IsLoading)
+    {
+        <div class="text-center py-5">
+            <p class="lead">Loading...</p>
+        </div>
+    }
+    else if (CurrentEntry == null)
     {
         <div class="text-center py-5">
             <p class="lead">No entry for this day.</p>
@@ -38,13 +44,15 @@
                             }
                         </select>
                     </div>
-                     <div class="col-md-6">
+
+                    <div class="col-md-6">
                         <label class="form-label fw-bold">Secondary Moods (Max 2)</label>
                         <div class="d-flex flex-wrap gap-2">
                             @foreach (var mood in AvailableMoods)
                             {
                                 var isSelected = IsSecondaryMoodSelected(mood);
-                                <button class="btn btn-sm @(isSelected ? "btn-info" : "btn-outline-secondary")" 
+                                <button type="button"
+                                        class="btn btn-sm @(isSelected ? "btn-info" : "btn-outline-secondary")"
                                         @onclick="() => ToggleSecondaryMood(mood)">
                                     @mood.Emoji
                                 </button>
@@ -55,7 +63,7 @@
 
                 <div class="mb-3">
                     <label class="form-label fw-bold">Content</label>
-                    <textarea class="form-control" rows="12" @bind="CurrentEntry.Content" placeholder="Write about your day... (Markdown supported)"></textarea>
+                    <textarea class="form-control" rows="12" @bind="CurrentEntry.Content" placeholder="Write about your day..."></textarea>
                 </div>
 
                 <div class="mb-3">
@@ -64,7 +72,7 @@
                         @foreach (var tag in AvailableTags)
                         {
                             var isSelected = CurrentEntry.Tags.Contains(tag);
-                            <span class="badge rounded-pill @(isSelected ? "bg-primary" : "bg-light text-dark border")" 
+                            <span class="badge rounded-pill @(isSelected ? "bg-primary" : "bg-light text-dark border")"
                                   style="cursor: pointer; user-select: none;"
                                   @onclick="() => ToggleTag(tag)">
                                 @tag
@@ -76,7 +84,7 @@
                 <div class="d-flex justify-content-between align-items-center mt-4">
                     <button class="btn btn-danger" @onclick="DeleteEntry">Delete</button>
                     <div>
-                         <span class="text-muted small me-2">@SaveStatus</span>
+                        <span class="text-muted small me-2">@SaveStatus</span>
                         <button class="btn btn-success px-4" @onclick="SaveEntry">Save Entry</button>
                     </div>
                 </div>
@@ -88,92 +96,134 @@
 @code {
     private DateTime CurrentDate = DateTime.Today;
     private JournalEntry? CurrentEntry;
+
     private List<Mood> AvailableMoods = new();
     private List<string> AvailableTags = new();
-    
-    private string SelectedPrimaryMoodName 
+
+    private bool IsLoading = true;
+    private string SaveStatus = "";
+
+    private bool IsFutureDate => CurrentDate.Date >= DateTime.Today;
+
+    private string SelectedPrimaryMoodName
     {
         get => CurrentEntry?.PrimaryMood?.Name ?? "";
-        set 
+        set
         {
             if (CurrentEntry != null)
             {
-                CurrentEntry.PrimaryMood = AvailableMoods.FirstOrDefault(m => m.Name == value);
+                var selected = AvailableMoods.FirstOrDefault(m => m.Name == value);
+                if (selected != null)
+                    CurrentEntry.PrimaryMood = selected;
             }
         }
     }
 
-    private string SaveStatus = "";
-    private bool IsFutureDate => CurrentDate.Date >= DateTime.Today;
-
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var query = uri.Query;
-        if (!string.IsNullOrEmpty(query) && query.Contains("date="))
-        {
-            try
-            {
-                var parts = query.Split(new[] { "date=" }, StringSplitOptions.None);
-                if (parts.Length > 1)
-                {
-                     var dateVal = parts[1].Split('&')[0];
-                     if (DateTime.TryParse(dateVal, out var parsedDate))
-                     {
-                         CurrentDate = parsedDate;
-                     }
-                }
-            }
-            catch { /* Ignore parsing errors */ }
-        }
+        ParseDateFromQuery();
 
         AvailableMoods = JournalService.GetAvailableMoods();
         AvailableTags = JournalService.GetAvailableTags();
-        LoadEntry();
+
+        await LoadEntryAsync();
     }
 
-    private void LoadEntry()
+    private void ParseDateFromQuery()
     {
-        CurrentEntry = JournalService.GetEntryByDate(CurrentDate);
-        SaveStatus = "";
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = uri.Query;
+
+        if (string.IsNullOrWhiteSpace(query) || !query.Contains("date="))
+            return;
+
+        try
+        {
+            var parts = query.Split(new[] { "date=" }, StringSplitOptions.None);
+            if (parts.Length <= 1) return;
+
+            var dateVal = parts[1].Split('&')[0];
+            if (DateTime.TryParse(dateVal, out var parsedDate))
+                CurrentDate = parsedDate.Date;
+        }
+        catch
+        {
+        }
     }
 
-    private void PreviousDay()
+    private async Task LoadEntryAsync()
+    {
+        IsLoading = true;
+        SaveStatus = "";
+
+        try
+        {
+            CurrentEntry = await JournalService.GetEntryByDateAsync(CurrentDate);
+        }
+        catch (Exception ex)
+        {
+            CurrentEntry = null;
+            await Application.Current?.MainPage?.DisplayAlert("Error", ex.Message, "OK");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PreviousDay()
     {
         CurrentDate = CurrentDate.AddDays(-1);
-        LoadEntry();
+        await LoadEntryAsync();
     }
 
-    private void NextDay()
+    private async Task NextDay()
     {
         if (!IsFutureDate)
         {
             CurrentDate = CurrentDate.AddDays(1);
-            LoadEntry();
+            await LoadEntryAsync();
         }
     }
 
     private void CreateEntry()
     {
         CurrentEntry = new JournalEntry { Date = CurrentDate };
+        SaveStatus = "";
     }
 
-    private void SaveEntry()
+    private async Task SaveEntry()
     {
-        if (CurrentEntry != null)
+        if (CurrentEntry == null) return;
+
+        try
         {
-            if (string.IsNullOrWhiteSpace(CurrentEntry.Title)) CurrentEntry.Title = "Untitled";
-            JournalService.SaveEntry(CurrentEntry);
+            if (string.IsNullOrWhiteSpace(CurrentEntry.Title))
+                CurrentEntry.Title = "Untitled";
+
+            await JournalService.SaveEntryAsync(CurrentEntry);
             SaveStatus = "Saved at " + DateTime.Now.ToShortTimeString();
+        }
+        catch (Exception ex)
+        {
+            await Application.Current?.MainPage?.DisplayAlert("Save Failed", ex.Message, "OK");
         }
     }
 
-    private void DeleteEntry()
+    private async Task DeleteEntry()
     {
-        if (CurrentEntry != null)
+        if (CurrentEntry == null) return;
+
+        try
         {
-            JournalService.DeleteEntry(CurrentEntry.Id);
+            await JournalService.DeleteEntryByDateAsync(CurrentEntry.Date);
             CurrentEntry = null;
+            SaveStatus = "";
+        }
+        catch (Exception ex)
+        {
+            await Application.Current?.MainPage?.DisplayAlert("Delete Failed", ex.Message, "OK");
         }
     }
 
@@ -185,7 +235,7 @@
     private void ToggleSecondaryMood(Mood mood)
     {
         if (CurrentEntry == null) return;
-        
+
         var existing = CurrentEntry.SecondaryMoods.FirstOrDefault(m => m.Name == mood.Name);
         if (existing != null)
         {
@@ -194,9 +244,7 @@
         else
         {
             if (CurrentEntry.SecondaryMoods.Count < 2)
-            {
                 CurrentEntry.SecondaryMoods.Add(mood);
-            }
         }
     }
 
@@ -205,12 +253,8 @@
         if (CurrentEntry == null) return;
 
         if (CurrentEntry.Tags.Contains(tag))
-        {
             CurrentEntry.Tags.Remove(tag);
-        }
         else
-        {
             CurrentEntry.Tags.Add(tag);
-        }
     }
 }

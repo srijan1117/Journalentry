@@ -1,6 +1,7 @@
+using System.IO;
 using Journal.Data;
-using Microsoft.EntityFrameworkCore;
 using Journal.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Journal
@@ -10,6 +11,7 @@ namespace Journal
         public static MauiApp CreateMauiApp()
         {
             var builder = MauiApp.CreateBuilder();
+
             builder
                 .UseMauiApp<App>()
                 .ConfigureFonts(fonts =>
@@ -19,11 +21,15 @@ namespace Journal
 
             builder.Services.AddMauiBlazorWebView();
 
+            // SQLite database stored in app private folder
             var dbPath = Path.Combine(FileSystem.AppDataDirectory, "journal.db");
             builder.Services.AddDbContext<AppDbContext>(options =>
                 options.UseSqlite($"Filename={dbPath}"));
 
-            builder.Services.AddSingleton<JournalService>();
+            // DbContext is scoped -> service should also be scoped
+            builder.Services.AddScoped<JournalService>();
+
+            // Auth can stay singleton if it doesn't depend on DbContext
             builder.Services.AddSingleton<AuthService>();
 
 #if DEBUG

@@ -5,84 +5,124 @@
 
 <h2>Today's Journal Entry</h2>
 
-@if (_saved)
+@if (IsLoading)
 {
-    <p class="text-success">Entry saved successfully.</p>
+    <p>Loading...</p>
+}
+else
+{
+    <EditForm Model="Entry" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        <div class="card p-3">
+            <div class="mb-3">
+                <label class="form-label">Title</label>
+                <InputText class="form-control" @bind-Value="Entry.Title" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Content</label>
+                <InputTextArea class="form-control" rows="8" @bind-Value="Entry.Content" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Primary Mood *</label>
+                <select class="form-select" @bind="SelectedMoodName">
+                    <option value="">-- Select Mood --</option>
+                    @foreach (var mood in AvailableMoods)
+                    {
+                        <option value="@mood.Name">@mood.Emoji @mood.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save / Update</button>
+                <button type="button" class="btn btn-danger" @onclick="DeleteAsync">Delete</button>
+            </div>
+
+            @if (Entry.CreatedAt != default)
+            {
+                <p class="text-muted small mt-3 mb-0">
+                    Created: @Entry.CreatedAt <br />
+                    Updated: @Entry.UpdatedAt
+                </p>
+            }
+        </div>
+    </EditForm>
 }
 
-<div class="card p-3">
-    <div class="mb-3">
-        <label class="form-label">Title</label>
-        <input class="form-control" @bind="entry.Title" />
-    </div>
-
-    <div class="mb-3">
-        <label class="form-label">Content</label>
-        <textarea class="form-control" rows="6" @bind="entry.Content"></textarea>
-    </div>
-
-    <div class="mb-3">
-        <label class="form-label">Primary Mood *</label>
-        <select class="form-select" @bind="SelectedMoodName">
-            <option value="">-- Select Mood --</option>
-            @foreach(var mood in AvailableMoods)
-            {
-                <option value="@mood.Name">@mood.Emoji @mood.Name</option>
-            }
-        </select>
-    </div>
-
-    <div class="mb-3">
-        <button class="btn btn-primary" @onclick="Save">Save / Update</button>
-        <button class="btn btn-danger" @onclick="Delete">Delete</button>
-    </div>
-
-    @if (entry.CreatedAt != default)
-    {
-        <p class="text-muted small">
-            Created: @entry.CreatedAt <br />
-            Updated: @entry.UpdatedAt
-        </p>
-    }
-</div>
-
 @code {
-    JournalEntry entry = new() { Date = DateTime.Today };
-    bool _saved = false;
-    List<Mood> AvailableMoods = new();
-    
+    private JournalEntry Entry = new() { Date = DateTime.Today };
+    private List<Mood> AvailableMoods = new();
+    private bool IsLoading = true;
+
     private string SelectedMoodName
     {
-        get => entry.PrimaryMood?.Name ?? "";
-        set => entry.PrimaryMood = AvailableMoods.FirstOrDefault(m => m.Name == value);
-    }
-
-    protected override void OnInitialized()
-    {
-        AvailableMoods = JournalService.GetAvailableMoods();
-        var today = JournalService.GetEntryByDate(DateTime.Today);
-        if (today != null)
+        get => Entry.PrimaryMood?.Name ?? "";
+        set
         {
-            entry = today;
+            var selected = AvailableMoods.FirstOrDefault(m => m.Name == value);
+            if (selected != null)
+                Entry.PrimaryMood = selected;
         }
     }
 
-    void Save()
+    protected override async Task OnInitializedAsync()
     {
-        if (entry.PrimaryMood == null)
-            return;
+        AvailableMoods = JournalService.GetAvailableMoods();
 
-        JournalService.SaveEntry(entry);
-        _saved = true;
+        try
+        {
+            var existing = await JournalService.GetEntryByDateAsync(DateTime.Today);
+            if (existing != null)
+                Entry = existing;
+        }
+        catch (Exception ex)
+        {
+            await Application.Current?.MainPage?.DisplayAlert("Error", ex.Message, "OK");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
-    void Delete()
+    private async Task SaveAsync()
     {
-        if (entry.Id != Guid.Empty)
+        try
         {
-            JournalService.DeleteEntry(entry.Id);
-            entry = new JournalEntry { Date = DateTime.Today };
-            _saved = false;
+            if (Entry.PrimaryMood == null || string.IsNullOrWhiteSpace(Entry.PrimaryMood.Name))
+            {
+                await Application.Current?.MainPage?.DisplayAlert("Missing Mood", "Please select a primary mood.", "OK");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(Entry.Title))
+                Entry.Title = "Untitled";
+
+            await JournalService.SaveEntryAsync(Entry);
+
+            await Application.Current?.MainPage?.DisplayAlert("Saved", "Entry saved successfully.", "OK");
+        }
+        catch (Exception ex)
+        {
+            await Application.Current?.MainPage?.DisplayAlert("Save Failed", ex.Message, "OK");
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        try
+        {
+            await JournalService.DeleteEntryByDateAsync(DateTime.Today);
+            Entry = new JournalEntry { Date = DateTime.Today };
+
+            await Application.Current?.MainPage?.DisplayAlert("Deleted", "Today's entry deleted.", "OK");
+        }
+        catch (Exception ex)
+        {
+            await Application.Current?.MainPage?.DisplayAlert("Delete Failed", ex.Message, "OK");
         }
     }
 }

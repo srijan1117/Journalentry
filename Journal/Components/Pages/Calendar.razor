@@ -11,90 +11,129 @@
         <button class="btn btn-outline-secondary" @onclick="NextMonth">Next &gt;</button>
     </div>
 
-    <div class="calendar-grid">
-        <div class="row text-center fw-bold mb-2">
-            <div class="col">Sun</div>
-            <div class="col">Mon</div>
-            <div class="col">Tue</div>
-            <div class="col">Wed</div>
-            <div class="col">Thu</div>
-            <div class="col">Fri</div>
-            <div class="col">Sat</div>
+    @if (IsLoading)
+    {
+        <div class="text-center py-4">
+            <p class="lead">Loading calendar...</p>
         </div>
-        
-        @for (int week = 0; week < Weeks.Count; week++)
-        {
-            <div class="row mb-2">
-                @foreach (var day in Weeks[week])
-                {
-                    <div class="col border p-2 text-center position-relative" 
-                         style="height: 100px; cursor: pointer; background-color: @(day.Date.Date == DateTime.Today ? "#e8f4fd" : (day.IsCurrentMonth ? "white" : "#f8f9fa")); opacity: @(day.IsCurrentMonth ? "1" : "0.6")"
-                         @onclick="() => SelectDate(day.Date)">
-                        
-                        <div class="d-flex justify-content-between">
-                            <span class="fw-bold small">@day.Date.Day</span>
+    }
+    else
+    {
+        <div class="calendar-grid">
+            <div class="row text-center fw-bold mb-2">
+                <div class="col">Sun</div>
+                <div class="col">Mon</div>
+                <div class="col">Tue</div>
+                <div class="col">Wed</div>
+                <div class="col">Thu</div>
+                <div class="col">Fri</div>
+                <div class="col">Sat</div>
+            </div>
+
+            @for (int week = 0; week < Weeks.Count; week++)
+            {
+                <div class="row mb-2">
+                    @foreach (var day in Weeks[week])
+                    {
+                        <div class="col border p-2 text-center position-relative"
+                             style="height: 100px; cursor: pointer; background-color: @(day.Date.Date == DateTime.Today ? "#e8f4fd" : (day.IsCurrentMonth ? "white" : "#f8f9fa")); opacity: @(day.IsCurrentMonth ? "1" : "0.6")"
+                             @onclick="() => SelectDate(day.Date)">
+
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold small">@day.Date.Day</span>
+                                @if (day.HasEntry)
+                                {
+                                    <span class="badge bg-success rounded-circle p-1" style="width: 8px; height: 8px;"> </span>
+                                }
+                            </div>
+
                             @if (day.HasEntry)
                             {
-                                <span class="badge bg-success rounded-circle p-1" style="width: 8px; height: 8px;"> </span>
+                                <div class="mt-2">
+                                    <div style="font-size: 1.5rem;">@day.MoodEmoji</div>
+                                    <div class="small text-truncate text-muted" style="font-size: 0.7rem;">
+                                        @day.EntryTitle
+                                    </div>
+                                </div>
                             }
                         </div>
-                        
-                        @if (day.HasEntry)
-                        {
-                            <div class="mt-2">
-                                <div style="font-size: 1.5rem;">@day.MoodEmoji</div>
-                                <div class="small text-truncate text-muted" style="font-size: 0.7rem;">
-                                    @day.EntryTitle
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-        }
-    </div>
+                    }
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
     private DateTime CurrentMonth = DateTime.Today;
     private List<List<CalendarDay>> Weeks = new();
+    private bool IsLoading = true;
 
-    protected override void OnInitialized()
+    // Cache entries by date for quick lookup
+    private Dictionary<DateTime, JournalEntry> EntriesByDate = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        GenerateCalendar();
+        await LoadMonthAsync();
     }
 
-    private void PrevMonth()
+    private async Task PrevMonth()
     {
         CurrentMonth = CurrentMonth.AddMonths(-1);
-        GenerateCalendar();
+        await LoadMonthAsync();
     }
 
-    private void NextMonth()
+    private async Task NextMonth()
     {
         CurrentMonth = CurrentMonth.AddMonths(1);
-        GenerateCalendar();
+        await LoadMonthAsync();
+    }
+
+    private async Task LoadMonthAsync()
+    {
+        IsLoading = true;
+
+        try
+        {
+            // Load all entries once, then filter in memory (simple + stable)
+            var all = await JournalService.GetAllEntriesAsync();
+
+            EntriesByDate = all
+                .GroupBy(e => e.Date.Date)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            GenerateCalendar();
+        }
+        catch (Exception ex)
+        {
+            await Application.Current?.MainPage?.DisplayAlert("Error", ex.Message, "OK");
+            Weeks = new();
+            EntriesByDate = new();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
     private void GenerateCalendar()
     {
         Weeks = new List<List<CalendarDay>>();
+
         var firstDayOfMonth = new DateTime(CurrentMonth.Year, CurrentMonth.Month, 1);
-        var daysInMonth = DateTime.DaysInMonth(CurrentMonth.Year, CurrentMonth.Month);
         var startDayOfWeek = (int)firstDayOfMonth.DayOfWeek;
-        
+
         var currentDay = firstDayOfMonth.AddDays(-startDayOfWeek);
-        
-        // Ensure we cover enough weeks to fill the grid (usually 5 or 6)
-        // We'll just generate until we are out of the month and completed the week
+
         bool done = false;
-        
         while (!done)
         {
             var week = new List<CalendarDay>();
+
             for (int j = 0; j < 7; j++)
             {
-                var entry = JournalService.GetEntryByDate(currentDay);
+                EntriesByDate.TryGetValue(currentDay.Date, out var entry);
+
                 week.Add(new CalendarDay
                 {
                     Date = currentDay,
@@ -103,17 +142,15 @@
                     EntryTitle = entry?.Title ?? "",
                     MoodEmoji = entry?.PrimaryMood?.Emoji ?? ""
                 });
-                
-                // Check if we are done (if currentDay is last day of week AND we are past current month)
+
                 if (j == 6 && currentDay.Month != CurrentMonth.Month && currentDay > firstDayOfMonth)
-                {
                     done = true;
-                }
-                
+
                 currentDay = currentDay.AddDays(1);
             }
+
             Weeks.Add(week);
-            if (Weeks.Count >= 6) done = true; // Safety break
+            if (Weeks.Count >= 6) done = true;
         }
     }
 
@@ -122,7 +159,7 @@
         Navigation.NavigateTo($"/?date={date:yyyy-MM-dd}");
     }
 
-    class CalendarDay
+    private class CalendarDay
     {
         public DateTime Date { get; set; }
         public bool IsCurrentMonth { get; set; }

@@ -1,99 +1,162 @@
 @page "/"
+@using System
+@using System.Linq
+@using System.Collections.Generic
+@using Microsoft.JSInterop
 @using Journal.Models
 @using Journal.Services
 @inject JournalService JournalService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <button class="btn btn-outline-secondary" @onclick="PreviousDay">&lt; Previous</button>
-        <h3>@CurrentDate.ToString("D")</h3>
-        <button class="btn btn-outline-secondary" @onclick="NextDay" disabled="@IsFutureDate">Next &gt;</button>
-    </div>
+<div class="container-page">
+    <!-- Header / Day Navigation -->
+    <div class="card-ui">
+        <div class="card-head">
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn-ui" type="button" @onclick="PreviousDay">&lt; Previous</button>
+                <span class="badge-pill">@CurrentDate.ToString("D")</span>
+                <button class="btn-ui" type="button" @onclick="NextDay" disabled="@IsFutureDate">Next &gt;</button>
+            </div>
 
-    @if (IsLoading)
-    {
-        <div class="text-center py-5">
-            <p class="lead">Loading...</p>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge-pill badge-streak">Streak UI</span>
+            </div>
         </div>
-    }
-    else if (CurrentEntry == null)
-    {
-        <div class="text-center py-5">
-            <p class="lead">No entry for this day.</p>
-            <button class="btn btn-primary btn-lg" @onclick="CreateEntry">Start Journaling</button>
-        </div>
-    }
-    else
-    {
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Title</label>
-                    <input type="text" class="form-control" @bind="CurrentEntry.Title" placeholder="Give your day a title..." />
+
+        <div class="card-body">
+            @if (IsLoading)
+            {
+                <div class="text-center py-4">
+                    <p class="p-muted">Loading...</p>
                 </div>
+            }
+            else if (CurrentEntry == null)
+            {
+                <div class="text-center py-4">
+                    <h3 class="h-title mb-2">No entry for this day</h3>
+                    <p class="p-muted mb-3">Start journaling to build your streak.</p>
+                    <button class="btn-ui btn-ui-primary" type="button" @onclick="CreateEntry">Start Journaling</button>
+                </div>
+            }
+            else
+            {
+                <!-- Main Entry Card -->
+                <div class="row-gap">
+                    <div class="card-ui">
+                        <div class="card-head">
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn-ui" @onclick="BackToHome">← Back</button>
+                                <h3 class="h-title m-0">Today’s Entry</h3>
+                            </div>
 
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Primary Mood</label>
-                        <select class="form-select" @bind="SelectedPrimaryMoodName">
-                            <option value="">Select Mood...</option>
-                            @foreach (var mood in AvailableMoods)
-                            {
-                                <option value="@mood.Name">@mood.Emoji @mood.Name</option>
-                            }
-                        </select>
-                    </div>
+                            <span class="badge-pill">
+                                @if (!string.IsNullOrWhiteSpace(SaveStatus))
+                                {
+                                    @SaveStatus
+                                }
+                                else
+                                {
+                                    <span class="p-muted">Not saved yet</span>
+                                }
+                            </span>
+                        </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label fw-bold">Secondary Moods (Max 2)</label>
-                        <div class="d-flex flex-wrap gap-2">
-                            @foreach (var mood in AvailableMoods)
-                            {
-                                var isSelected = IsSecondaryMoodSelected(mood);
-                                <button type="button"
-                                        class="btn btn-sm @(isSelected ? "btn-info" : "btn-outline-secondary")"
-                                        @onclick="() => ToggleSecondaryMood(mood)">
-                                    @mood.Emoji
+
+                        <div class="card-body">
+                            <!-- Title -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Title</label>
+                                <input type="text"
+                                       class="input-ui"
+                                       @bind="CurrentEntry.Title"
+                                       placeholder="Give your day a title..." />
+                            </div>
+
+                            <!-- Moods (simplified UI but coursework compliant) -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Primary Mood</label>
+                                <select class="input-ui" @bind="SelectedPrimaryMoodName">
+                                    <option value="">Select mood...</option>
+                                    @foreach (var mood in AvailableMoods)
+                                    {
+                                        <option value="@mood.Name">@mood.Emoji @mood.Name</option>
+                                    }
+                                </select>
+
+                                <div class="mt-2">
+                                    <button type="button" class="btn-ui btn-ui-soft" @onclick="ToggleSecondaryPanel">
+                                        @(ShowSecondary ? "Hide secondary moods" : "Add secondary moods (optional)")
+                                    </button>
+                                </div>
+
+                                @if (ShowSecondary)
+                                {
+                                    <div class="mt-2 d-flex gap-2 flex-wrap">
+                                        @foreach (var mood in AvailableMoods)
+                                        {
+                                            var isSelected = IsSecondaryMoodSelected(mood);
+                                            <button type="button"
+                                                    class="btn-ui @(isSelected ? "btn-ui-soft" : "")"
+                                                    @onclick="() => ToggleSecondaryMood(mood)">
+                                                @mood.Emoji
+                                            </button>
+                                        }
+                                    </div>
+                                    <div class="p-muted mt-1" style="font-size: 13px;">
+                                        Pick up to 2.
+                                    </div>
+                                }
+                            </div>
+
+
+                            <!-- Content (Quill) -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Content</label>
+
+                                <div id="quillEditor" class="card-ui" style="height: 280px; background: white;"></div>
+
+                                <div class="p-muted mt-2" style="font-size: 13px;">
+                                    Formatting supported: headings, bold, italics, lists, links.
+                                </div>
+                            </div>
+
+                            <!-- Tags -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Tags</label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @foreach (var tag in AvailableTags)
+                                    {
+                                        var isSelected = CurrentEntry.Tags.Contains(tag);
+
+                                        <button type="button"
+                                                class="btn-ui @(isSelected ? "btn-ui-soft" : "")"
+                                                @onclick="() => ToggleTag(tag)">
+                                            @tag
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="d-flex justify-content-between align-items-center mt-4">
+                                <button class="btn-ui btn-ui-danger" type="button" @onclick="DeleteEntry">
+                                    Delete
                                 </button>
-                            }
+
+                                <button class="btn-ui btn-ui-primary" type="button" @onclick="SaveEntry">
+                                    Save Entry
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Content</label>
-                    <textarea class="form-control" rows="12" @bind="CurrentEntry.Content" placeholder="Write about your day..."></textarea>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Tags</label>
-                    <div class="d-flex flex-wrap gap-2">
-                        @foreach (var tag in AvailableTags)
-                        {
-                            var isSelected = CurrentEntry.Tags.Contains(tag);
-                            <span class="badge rounded-pill @(isSelected ? "bg-primary" : "bg-light text-dark border")"
-                                  style="cursor: pointer; user-select: none;"
-                                  @onclick="() => ToggleTag(tag)">
-                                @tag
-                            </span>
-                        }
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mt-4">
-                    <button class="btn btn-danger" @onclick="DeleteEntry">Delete</button>
-                    <div>
-                        <span class="text-muted small me-2">@SaveStatus</span>
-                        <button class="btn btn-success px-4" @onclick="SaveEntry">Save Entry</button>
-                    </div>
-                </div>
-            </div>
+            }
         </div>
-    }
+    </div>
 </div>
-
 @code {
+
     private DateTime CurrentDate = DateTime.Today;
     private JournalEntry? CurrentEntry;
 
@@ -105,6 +168,13 @@
 
     private bool IsFutureDate => CurrentDate.Date >= DateTime.Today;
 
+    // Quill state
+    private bool QuillReady = false;
+    private string? PendingQuillHtml = null;
+
+    // Secondary mood UI toggle
+    private bool ShowSecondary = false;
+
     private string SelectedPrimaryMoodName
     {
         get => CurrentEntry?.PrimaryMood?.Name ?? "";
@@ -113,8 +183,7 @@
             if (CurrentEntry != null)
             {
                 var selected = AvailableMoods.FirstOrDefault(m => m.Name == value);
-                if (selected != null)
-                    CurrentEntry.PrimaryMood = selected;
+                CurrentEntry.PrimaryMood = selected;
             }
         }
     }
@@ -122,11 +191,58 @@
     protected override async Task OnInitializedAsync()
     {
         ParseDateFromQuery();
+        ParseForceStartFromQuery();
 
         AvailableMoods = JournalService.GetAvailableMoods();
         AvailableTags = JournalService.GetAvailableTags();
 
         await LoadEntryAsync();
+
+        if (ForceStart)
+        {
+            CurrentEntry = null;   // show Start Journaling screen
+            SaveStatus = "";
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (CurrentEntry == null) return;
+
+        try
+        {
+            if (!QuillReady)
+            {
+                await JS.InvokeVoidAsync("initQuill", "quillEditor");
+                QuillReady = true;
+            }
+
+            if (PendingQuillHtml != null)
+            {
+                await JS.InvokeVoidAsync("setQuillHtml", PendingQuillHtml);
+                PendingQuillHtml = null;
+            }
+        }
+        catch
+        {
+            // If Quill isn't ready yet due to timing, prevent Blazor from showing the error banner.
+        }
+    }
+
+
+    private void ToggleSecondaryPanel()
+    {
+        ShowSecondary = !ShowSecondary;
+    }
+    private bool ForceStart = false;
+
+    private void ParseForceStartFromQuery()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = uri.Query;
+
+        ForceStart = !string.IsNullOrWhiteSpace(query) && query.Contains("new=1");
     }
 
     private void ParseDateFromQuery()
@@ -153,17 +269,25 @@
 
     private async Task LoadEntryAsync()
     {
+        await JS.InvokeVoidAsync("destroyQuill", "quillEditor");
+        QuillReady = false;
+        PendingQuillHtml = null;
+
         IsLoading = true;
+        StateHasChanged();
+
         SaveStatus = "";
+        ShowSecondary = false;
 
         try
         {
             CurrentEntry = await JournalService.GetEntryByDateAsync(CurrentDate);
+            PendingQuillHtml = CurrentEntry?.Content ?? "";
         }
         catch (Exception ex)
         {
             CurrentEntry = null;
-            await Application.Current?.MainPage?.DisplayAlert("Error", ex.Message, "OK");
+            await Microsoft.Maui.Controls.Application.Current?.MainPage?.DisplayAlert("Error", ex.Message, "OK");
         }
         finally
         {
@@ -191,6 +315,10 @@
     {
         CurrentEntry = new JournalEntry { Date = CurrentDate };
         SaveStatus = "";
+        ShowSecondary = false;
+
+        PendingQuillHtml = "";
+        QuillReady = false; // IMPORTANT: allow initQuill on render
     }
 
     private async Task SaveEntry()
@@ -199,20 +327,35 @@
 
         try
         {
+            CurrentEntry.Content = await JS.InvokeAsync<string>("getQuillHtml");
+
             if (string.IsNullOrWhiteSpace(CurrentEntry.Title))
                 CurrentEntry.Title = "Untitled";
+
+            if (CurrentEntry.PrimaryMood == null)
+            {
+                await Microsoft.Maui.Controls.Application.Current?.MainPage?.DisplayAlert(
+                    "Missing Mood",
+                    "Please select a Primary Mood.",
+                    "OK");
+                return;
+            }
 
             await JournalService.SaveEntryAsync(CurrentEntry);
             SaveStatus = "Saved at " + DateTime.Now.ToShortTimeString();
         }
         catch (Exception ex)
         {
-            await Application.Current?.MainPage?.DisplayAlert("Save Failed", ex.Message, "OK");
+            await Microsoft.Maui.Controls.Application.Current?.MainPage?.DisplayAlert("Save Failed", ex.Message, "OK");
         }
     }
 
     private async Task DeleteEntry()
     {
+        await JS.InvokeVoidAsync("destroyQuill", "quillEditor");
+        QuillReady = false;
+        PendingQuillHtml = null;
+
         if (CurrentEntry == null) return;
 
         try
@@ -220,10 +363,12 @@
             await JournalService.DeleteEntryByDateAsync(CurrentEntry.Date);
             CurrentEntry = null;
             SaveStatus = "";
+            QuillReady = false;
+            PendingQuillHtml = null;
         }
         catch (Exception ex)
         {
-            await Application.Current?.MainPage?.DisplayAlert("Delete Failed", ex.Message, "OK");
+            await Microsoft.Maui.Controls.Application.Current?.MainPage?.DisplayAlert("Delete Failed", ex.Message, "OK");
         }
     }
 
@@ -235,6 +380,9 @@
     private void ToggleSecondaryMood(Mood mood)
     {
         if (CurrentEntry == null) return;
+
+        // Prevent selecting same mood as primary
+        if (CurrentEntry.PrimaryMood?.Name == mood.Name) return;
 
         var existing = CurrentEntry.SecondaryMoods.FirstOrDefault(m => m.Name == mood.Name);
         if (existing != null)
@@ -256,5 +404,16 @@
             CurrentEntry.Tags.Remove(tag);
         else
             CurrentEntry.Tags.Add(tag);
+    }
+
+    private async Task BackToHome()
+    {
+        await JS.InvokeVoidAsync("destroyQuill", "quillEditor");
+        CurrentEntry = null;
+        SaveStatus = "";
+        QuillReady = false;
+        PendingQuillHtml = null;
+
+        ShowSecondary = false;
     }
 }

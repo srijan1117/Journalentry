@@ -2,6 +2,7 @@
 @using Journal.Models
 @using Journal.Services
 @inject JournalService JournalService
+@inject IJSRuntime JS
 
 <h2>Today's Journal Entry</h2>
 
@@ -21,8 +22,10 @@ else
             </div>
 
             <div class="mb-3">
-                <label class="form-label">Content</label>
-                <InputTextArea class="form-control" rows="8" @bind-Value="Entry.Content" />
+                <label class="form-label">Rich Content (Quill)</label>
+
+                <!-- Quill editor container -->
+                <div id="editor" style="height:300px; background:white;"></div>
             </div>
 
             <div class="mb-3">
@@ -56,6 +59,7 @@ else
     private JournalEntry Entry = new() { Date = DateTime.Today };
     private List<Mood> AvailableMoods = new();
     private bool IsLoading = true;
+    private bool QuillInitialized = false;
 
     private string SelectedMoodName
     {
@@ -88,10 +92,24 @@ else
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Quill needs DOM rendered first
+        if (!QuillInitialized && !IsLoading)
+        {
+            await JS.InvokeVoidAsync("initQuill", "editor");
+            await JS.InvokeVoidAsync("setQuillHtml", Entry.Content); // load saved HTML
+            QuillInitialized = true;
+        }
+    }
+
     private async Task SaveAsync()
     {
         try
         {
+            // pull latest HTML from Quill into Entry.Content
+            Entry.Content = await JS.InvokeAsync<string>("getQuillHtml");
+
             if (Entry.PrimaryMood == null || string.IsNullOrWhiteSpace(Entry.PrimaryMood.Name))
             {
                 await Application.Current?.MainPage?.DisplayAlert("Missing Mood", "Please select a primary mood.", "OK");
@@ -117,6 +135,10 @@ else
         {
             await JournalService.DeleteEntryByDateAsync(DateTime.Today);
             Entry = new JournalEntry { Date = DateTime.Today };
+
+            // reset Quill UI too
+            if (QuillInitialized)
+                await JS.InvokeVoidAsync("setQuillHtml", "");
 
             await Application.Current?.MainPage?.DisplayAlert("Deleted", "Today's entry deleted.", "OK");
         }

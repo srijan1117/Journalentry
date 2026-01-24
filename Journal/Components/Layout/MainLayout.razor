@@ -4,22 +4,21 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-@if (!AuthService.IsAuthenticated)
+@if (!AuthService.IsAuthenticated && !Navigation.Uri.EndsWith("/login"))
 {
-    <Journal.Components.Pages.Login />
+    Navigation.NavigateTo("/login");
 }
-else
-{
-    <div class="page">
-        <TopNav />
 
-        <main>
-            <article class="content px-4">
-                @Body
-            </article>
-        </main>
-    </div>
+@if (AuthService.IsAuthenticated)
+{
+    <TopNav />
 }
+
+<main>
+    <article class="content px-4">
+        @Body
+    </article>
+</main>
 
 @code {
     protected override void OnInitialized()

@@ -3,98 +3,106 @@
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 
-<nav class="top-nav">
-    <div class="nav-left">
-        <span class="app-title">Journal</span>
-    </div>
+<nav class="topbar">
+    <div class="topbar-inner">
+        <div class="brand" role="button" tabindex="0" @onclick="GoHome">
+            Journal
+        </div>
 
-    <div class="nav-center">
-        <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
-            Home
-        </NavLink>
-        <NavLink href="/calendar" class="nav-link">
-            Calendar
-        </NavLink>
-    </div>
+        <div class="links">
+            <NavLink href="/" Match="NavLinkMatch.All" class="link">Home</NavLink>
+            <NavLink href="/calendar" class="link">Calendar</NavLink>
+        </div>
 
-    <div class="nav-right">
-        <button class="logout-btn" @onclick="Logout">
-            Logout
-        </button>
+        <div class="right">
+            <button class="btn-ui btn-ui-soft" type="button" @onclick="ThemeInfo">
+                Change Theme
+            </button>
+
+            <button class="btn-ui btn-ui-danger" type="button" @onclick="Logout">
+                Logout
+            </button>
+        </div>
     </div>
 </nav>
 
 <style>
-    .top-nav {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: center;
-        padding: 10px 16px;
-        border-bottom: 1px solid #e5e5e5;
-        background: #ffffff;
+    .topbar {
+        background: var(--mint);
+        border-bottom: 1px solid var(--border);
         position: sticky;
         top: 0;
         z-index: 100;
     }
 
-    .nav-left {
-        justify-self: start;
+    .topbar-inner {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 12px 16px;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 10px;
     }
 
-    .nav-center {
-        justify-self: center;
+    .brand {
+        font-weight: 900;
+        font-size: 22px;
+        color: #0f172a;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .links {
         display: flex;
-        gap: 16px;
+        gap: 18px;
+        justify-content: center;
+        flex-wrap: wrap;
     }
 
-    .nav-right {
-        justify-self: end;
-    }
-
-    .app-title {
-        font-weight: bold;
-        font-size: 20px;
-    }
-
-    .nav-link {
+    .link {
         text-decoration: none;
-        color: #333;
-        padding: 6px 10px;
-        border-radius: 6px;
+        color: #0f172a;
+        padding: 8px 10px;
+        border-radius: 10px;
+        font-weight: 700;
     }
 
-        .nav-link.active {
-            background: #efefef;
-            font-weight: 600;
+        .link.active {
+            background: rgba(255,255,255,0.7);
+            border: 1px solid var(--border);
         }
 
-    .logout-btn {
-        background: none;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        padding: 6px 10px;
-        cursor: pointer;
+    .right {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
     }
 
-    @@media (max-width: 600px) {
-        .top-nav {
+    @@media (max-width: 900px) {
+        .topbar-inner {
             grid-template-columns: 1fr;
-            gap: 10px;
             justify-items: center;
         }
 
-        .nav-left, .nav-right {
-            justify-self: center;
-        }
-
-        .nav-center {
-            width: 100%;
-            justify-content: space-between;
+        .right {
+            justify-content: center;
         }
     }
 </style>
 
 @code {
+    private void GoHome()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task ThemeInfo()
+    {
+        await Application.Current?.MainPage?.DisplayAlert("Theme", "Theme toggle will be added later (light/dark).", "OK");
+    }
+
     private void Logout()
     {
         AuthService.Logout();

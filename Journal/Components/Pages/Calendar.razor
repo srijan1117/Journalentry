@@ -3,12 +3,35 @@
 @using Journal.Services
 @inject JournalService JournalService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <button class="btn btn-outline-secondary" @onclick="PrevMonth">&lt; Previous</button>
         <h3>@CurrentMonth.ToString("MMMM yyyy")</h3>
         <button class="btn btn-outline-secondary" @onclick="NextMonth">Next &gt;</button>
+    </div>
+   <div class="mb-2">
+    <span class="badge-pill" style="background:#16a34a; color:white;">
+        Longest Streak: @MonthLongestStreak
+    </span>
+
+    <span class="badge-pill" style="background:#dc2626; color:white;">
+        Missed Days: @MonthMissedDays
+    </span>
+</div>
+
+    <div class="card-ui p-3 mb-3">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <strong>Export Journals</strong>
+            <input type="date" class="input-ui" style="max-width:200px" @bind="ExportFrom" />
+            <input type="date" class="input-ui" style="max-width:200px" @bind="ExportTo" />
+            <button class="btn-ui btn-ui-primary" type="button" @onclick="ExportPdf">Export as PDF</button>
+        </div>
+        @if (!string.IsNullOrEmpty(ExportStatus))
+        {
+            <div class="mt-2 p-muted">@ExportStatus</div>
+        }
     </div>
 
     @if (IsLoading)
@@ -68,6 +91,11 @@
     private DateTime CurrentMonth = DateTime.Today;
     private List<List<CalendarDay>> Weeks = new();
     private bool IsLoading = true;
+    private int MonthLongestStreak = 0;
+    private int MonthMissedDays = 0;
+    private DateTime? ExportFrom = null;
+    private DateTime? ExportTo = null;
+    private string ExportStatus = "";
 
     // Cache entries by date for quick lookup
     private Dictionary<DateTime, JournalEntry> EntriesByDate = new();
@@ -103,6 +131,7 @@
                 .ToDictionary(g => g.Key, g => g.First());
 
             GenerateCalendar();
+            ComputeMonthStats();
         }
         catch (Exception ex)
         {
@@ -157,6 +186,94 @@
     private void SelectDate(DateTime date)
     {
         Navigation.NavigateTo($"/?date={date:yyyy-MM-dd}");
+    }
+
+    private void ComputeMonthStats()
+    {
+        var first = new DateTime(CurrentMonth.Year, CurrentMonth.Month, 1);
+        var days = DateTime.DaysInMonth(CurrentMonth.Year, CurrentMonth.Month);
+        var longest = 0;
+        var current = 0;
+        var missed = 0;
+        for (int i = 0; i < days; i++)
+        {
+            var d = first.AddDays(i).Date;
+            var has = EntriesByDate.ContainsKey(d);
+            if (has)
+            {
+                current++;
+                if (current > longest) longest = current;
+            }
+            else
+            {
+                current = 0;
+                missed++;
+            }
+        }
+        MonthLongestStreak = longest;
+        MonthMissedDays = missed;
+    }
+    private async Task ExportPdf()
+    {
+        try
+        {
+            ExportStatus = "";
+            var entries = await JournalService.SearchEntriesAsync(null, ExportFrom, ExportTo, new List<string>(), new List<string>());
+
+            if (entries.Count == 0)
+            {
+                ExportStatus = "No entries found for the selected date range.";
+                return;
+            }
+
+            var html = BuildExportHtml(entries);
+            await JS.InvokeVoidAsync("printHtml", "Journal Export", html);
+            ExportStatus = $"Prepared {entries.Count} entries. Printing...";
+        }
+        catch (Exception ex)
+        {
+            ExportStatus = $"Export failed: {ex.Message}";
+        }
+    }
+
+    private string BuildExportHtml(List<JournalEntry> entries)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset='utf-8'/>");
+        sb.Append("<title>Journal Export</title>");
+        sb.Append("<style>");
+        sb.Append("body{font-family:Arial, sans-serif; color:#111827; margin:24px;}");
+        sb.Append(".entry{margin:16px 0; padding:12px; border:1px solid #e5e7eb; border-radius:8px;}");
+        sb.Append(".title{font-weight:700; font-size:16px; margin:0 0 6px 0;}");
+        sb.Append(".meta{font-size:12px; color:#6b7280; margin-bottom:8px;}");
+        sb.Append(".content{font-size:14px; line-height:1.5;}");
+        sb.Append("</style></head><body>");
+        sb.Append("<h2>Journal Export</h2>");
+        foreach (var e in entries.OrderBy(x => x.Date))
+        {
+            var tagsList = e.Tags ?? new List<string>();
+            var tagsJoined = tagsList.Count > 0 ? string.Join(", ", tagsList) : "";
+            var secList = e.SecondaryMoods ?? new List<Mood>();
+            var secJoined = secList.Count > 0 ? string.Join(", ", secList.Select(m => (m.Emoji ?? "") + " " + (m.Name ?? "")).Select(s => s.Trim())) : "";
+            var primaryEmoji = e.PrimaryMood?.Emoji ?? "";
+            var primaryName = e.PrimaryMood?.Name ?? "";
+            var primaryDisplay = (primaryEmoji + " " + primaryName).Trim();
+            var metaParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(primaryDisplay)) metaParts.Add("Primary: " + System.Net.WebUtility.HtmlEncode(primaryDisplay));
+            if (!string.IsNullOrWhiteSpace(secJoined)) metaParts.Add("Secondary: " + System.Net.WebUtility.HtmlEncode(secJoined));
+            if (!string.IsNullOrWhiteSpace(tagsJoined)) metaParts.Add("Tags: " + System.Net.WebUtility.HtmlEncode(tagsJoined));
+            sb.Append("<div class='entry'>");
+            sb.Append("<div class='meta'>" + e.Date.ToString("dddd, MMMM dd, yyyy") + "</div>");
+            sb.Append("<div class='title'>" + System.Net.WebUtility.HtmlEncode(e.Title ?? "") + "</div>");
+            if (metaParts.Count > 0)
+            {
+                sb.Append("<div class='meta'>" + string.Join(" | ", metaParts) + "</div>");
+            }
+            sb.Append("<div class='content'>" + (e.Content ?? "") + "</div>");
+            sb.Append("</div>");
+        }
+        sb.Append("</body></html>");
+        return sb.ToString();
     }
 
     private class CalendarDay

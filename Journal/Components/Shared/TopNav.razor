@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Routing
 @using Journal.Services
 @inject AuthService AuthService
 @inject NavigationManager Navigation
@@ -12,6 +12,7 @@
         <div class="links">
             <NavLink href="/" Match="NavLinkMatch.All" class="link">Home</NavLink>
             <NavLink href="/calendar" class="link">Calendar</NavLink>
+            <NavLink href="/dashboard" class="link">Dashboard</NavLink>
         </div>
 
         <div class="right">

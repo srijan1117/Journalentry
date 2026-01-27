@@ -1,0 +1,250 @@
+@page "/dashboard"
+@using System.Text.RegularExpressions
+@using Journal.Models
+@using Journal.Services
+@inject JournalService JournalService
+
+<div class="container-page">
+    <div class="card-ui">
+        <div class="card-head">
+            <h3 class="h-title m-0">Dashboard</h3>
+            <span class="badge-pill">Analytics & Insights</span>
+        </div>
+
+        <div class="card-body">
+            @if (IsLoading)
+            {
+                <p class="p-muted text-center py-4">Loading…</p>
+            }
+            else if (!string.IsNullOrEmpty(Error))
+            {
+                <div class="alert alert-danger">@Error</div>
+            }
+            else
+            {
+                <div class="row-gap">
+
+                    <!-- Mood Distribution -->
+                    <div class="card-ui">
+                        <div class="card-head">
+                            <h4 class="h-title m-0">Mood Distribution</h4>
+                        </div>
+                        <div class="card-body">
+                            @if (MoodCountsSorted.Count == 0)
+                            {
+                                <p class="p-muted">No moods yet.</p>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-column gap-2" style="max-width:600px;">
+                                    @foreach (var kv in MoodCountsSorted)
+                                    {
+                                        var pct = TotalMoodCount > 0
+                                        ? (int)Math.Round(kv.Value * 100.0 / TotalMoodCount)
+                                        : 0;
+
+                                        <div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="badge-pill">@kv.Key</span>
+                                                <span class="badge-pill">@kv.Value (@pct%)</span>
+                                            </div>
+                                            <div class="bar-bg">
+                                                <div class="bar mood" style="width:@pct%"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Frequent Moods -->
+                    <div class="card-ui">
+                        <div class="card-head">
+                            <h4 class="h-title m-0">Frequent Moods</h4>
+                        </div>
+                        <div class="card-body">
+                            @if (TopMoods.Count == 0)
+                            {
+                                <p class="p-muted">No moods yet.</p>
+                            }
+                            else
+                            {
+                                <div class="d-flex gap-2 flex-wrap">
+                                    @foreach (var m in TopMoods)
+                                    {
+                                        <span class="badge-pill">@m.Mood</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Tag Breakdown -->
+                    <div class="card-ui">
+                        <div class="card-head">
+                            <h4 class="h-title m-0">Top Tags</h4>
+                        </div>
+                        <div class="card-body">
+                            @if (TagCountsSorted.Count == 0)
+                            {
+                                <p class="p-muted">No tags yet.</p>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-column gap-2" style="max-width:600px;">
+                                    @foreach (var kv in TagCountsSorted.Take(10))
+                                    {
+                                        var pct = MaxTagCount > 0
+                                        ? (int)Math.Round(kv.Value * 100.0 / MaxTagCount)
+                                        : 0;
+
+                                        <div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="badge-pill">@kv.Key</span>
+                                                <span class="badge-pill">@kv.Value</span>
+                                            </div>
+                                            <div class="bar-bg">
+                                                <div class="bar tag" style="width:@pct%"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Word Count Trends -->
+                    <div class="card-ui">
+                        <div class="card-head">
+                            <h4 class="h-title m-0">Word Count (Last 14 Days)</h4>
+                        </div>
+                        <div class="card-body">
+                            @if (WordCounts.Count == 0)
+                            {
+                                <p class="p-muted">No entries yet.</p>
+                            }
+                            else
+                            {
+                                var maxWords = WordCounts.Max(x => x.Words);
+
+                                <div class="d-flex flex-column gap-2" style="max-width:700px;">
+                                    @foreach (var wc in WordCounts.TakeLast(14))
+                                    {
+                                        var pct = maxWords > 0
+                                        ? (int)Math.Round(wc.Words * 100.0 / maxWords)
+                                        : 0;
+
+                                        <div>
+                                            <div class="d-flex justify-content-between">
+                                                <span class="badge-pill">@wc.Date.ToString("MMM dd")</span>
+                                                <span class="badge-pill">@wc.Words</span>
+                                            </div>
+                                            <div class="bar-bg">
+                                                <div class="bar words" style="width:@pct%"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool IsLoading = true;
+    private string? Error;
+
+    private List<JournalEntry> Entries = new();
+
+    private Dictionary<string, int> MoodCounts = new();
+    private List<KeyValuePair<string, int>> MoodCountsSorted = new();
+    private int TotalMoodCount;
+    private List<(string Mood, int Count)> TopMoods = new();
+
+    private Dictionary<string, int> TagCounts = new();
+    private List<KeyValuePair<string, int>> TagCountsSorted = new();
+    private int MaxTagCount;
+
+    private List<(DateTime Date, int Words)> WordCounts = new();
+
+    private static readonly Regex HtmlRegex =
+        new("<.*?>", RegexOptions.Compiled);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Entries = (await JournalService.GetAllEntriesAsync())
+                .OrderBy(e => e.Date)
+                .ToList();
+
+            ComputeStats();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void ComputeStats()
+    {
+        // Moods
+        MoodCounts = Entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.PrimaryMood?.Name))
+            .GroupBy(e => e.PrimaryMood!.Name)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        MoodCountsSorted = MoodCounts
+            .OrderByDescending(k => k.Value)
+            .ToList();
+
+        TotalMoodCount = MoodCounts.Values.Sum();
+
+        TopMoods = MoodCountsSorted
+            .Take(5)
+            .Select(k => (k.Key, k.Value))
+            .ToList();
+
+        // Tags (normalized)
+        TagCounts = Entries
+            .SelectMany(e => e.Tags ?? [])
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(),
+                          StringComparer.OrdinalIgnoreCase);
+
+        TagCountsSorted = TagCounts
+            .OrderByDescending(k => k.Value)
+            .ToList();
+
+        MaxTagCount = TagCounts.Count > 0 ? TagCounts.Values.Max() : 0;
+
+        // Word counts per day
+        WordCounts = Entries
+            .GroupBy(e => e.Date.Date)
+            .Select(g => (
+                g.Key,
+                g.Sum(e => CountWords(StripHtml(e.Content)))
+            ))
+            .OrderBy(x => x.Key)
+            .ToList();
+    }
+
+    private static string StripHtml(string? text) =>
+        HtmlRegex.Replace(text ?? "", " ");
+
+    private static int CountWords(string text) =>
+        text.Split(new[] { ' ', '\n', '\r', '\t' },
+                   StringSplitOptions.RemoveEmptyEntries).Length;
+}

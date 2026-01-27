@@ -1,13 +1,18 @@
 window._quill = null;
 
-window._quill = null;
-
 window.initQuill = function (editorId) {
     const editorElement = document.getElementById(editorId);
     if (!editorElement) return;
 
-    // Prevent double initialization
-    if (window._quill) return;
+    // Check if we have an existing valid instance on this element
+    if (window._quill) {
+        // If the editor is already attached to this element and connected to DOM, skip
+        if (window._quill.root && window._quill.root.isConnected && editorElement.contains(window._quill.root)) {
+            return;
+        }
+        // Otherwise, the old instance is stale (detached), so we clean up
+        window._quill = null;
+    }
 
     // Ensure container is empty before initializing
     editorElement.innerHTML = "";
@@ -27,7 +32,6 @@ window.initQuill = function (editorId) {
     });
 };
 
-
 window.getQuillHtml = function () {
     if (!window._quill) return "";
     return window._quill.root.innerHTML;
@@ -38,6 +42,11 @@ window.setQuillHtml = function (html) {
     window._quill.clipboard.dangerouslyPasteHTML(html || "");
 };
 
+window.enableQuill = function (enabled) {
+    if (!window._quill) return;
+    window._quill.enable(enabled);
+};
+
 window.destroyQuill = function (editorId) {
     try {
         window._quill = null;
@@ -45,5 +54,3 @@ window.destroyQuill = function (editorId) {
         if (el) el.innerHTML = "";
     } catch { }
 };
-
-

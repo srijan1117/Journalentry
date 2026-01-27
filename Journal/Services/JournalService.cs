@@ -144,5 +144,85 @@ namespace Journal.Services
                 entry.SecondaryMoods.Any(m => m.Name == entry.PrimaryMood.Name))
                 throw new ArgumentException("Secondary moods cannot include the primary mood.");
         }
+
+        public async Task<JournalStats> GetStatsAsync()
+        {
+            var dates = await _db.JournalEntries
+                .AsNoTracking()
+                .OrderByDescending(e => e.Date)
+                .Select(e => e.Date)
+                .ToListAsync();
+
+            var stats = new JournalStats
+            {
+                TotalEntries = dates.Count
+            };
+
+            if (dates.Count == 0) return stats;
+
+            // Ensure dates are unique and sorted (DB enforces unique, but good to be safe)
+            var sortedDates = dates.Distinct().OrderByDescending(d => d).ToList();
+
+            // --- Calculate Current Streak ---
+            // A streak is kept alive if the last entry is Today OR Yesterday.
+            // If the last entry is older than yesterday, the current streak is 0.
+            
+            int currentStreak = 0;
+            var today = DateTime.Today;
+            var lastEntryDate = sortedDates.First();
+
+            if (lastEntryDate == today || lastEntryDate == today.AddDays(-1))
+            {
+                // Count backwards from the last entry
+                currentStreak = 1;
+                for (int i = 1; i < sortedDates.Count; i++)
+                {
+                    var expectedDate = lastEntryDate.AddDays(-i);
+                    if (sortedDates[i] == expectedDate)
+                    {
+                        currentStreak++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            stats.CurrentStreak = currentStreak;
+
+            // --- Calculate Longest Streak ---
+            int longestStreak = 0;
+            int tempStreak = 0;
+
+            for (int i = 0; i < sortedDates.Count; i++)
+            {
+                if (i == 0)
+                {
+                    tempStreak = 1;
+                }
+                else
+                {
+                    var prevDate = sortedDates[i - 1];
+                    var currDate = sortedDates[i];
+
+                    if (currDate == prevDate.AddDays(-1))
+                    {
+                        tempStreak++;
+                    }
+                    else
+                    {
+                        tempStreak = 1;
+                    }
+                }
+
+                if (tempStreak > longestStreak)
+                {
+                    longestStreak = tempStreak;
+                }
+            }
+            stats.LongestStreak = longestStreak;
+
+            return stats;
+        }
     }
 }

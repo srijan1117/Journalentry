@@ -20,7 +20,9 @@
             </div>
 
             <div class="d-flex align-items-center gap-2">
-                <span class="badge-pill badge-streak">Streak UI</span>
+                <span class="badge-pill badge-streak">
+                     🔥 @Stats.CurrentStreak Day Streak
+                </span>
             </div>
         </div>
 
@@ -159,6 +161,7 @@
 
     private DateTime CurrentDate = DateTime.Today;
     private JournalEntry? CurrentEntry;
+    private JournalStats Stats = new();
 
     private List<Mood> AvailableMoods = new();
     private List<string> AvailableTags = new();
@@ -196,6 +199,7 @@
         AvailableMoods = JournalService.GetAvailableMoods();
         AvailableTags = JournalService.GetAvailableTags();
 
+        await LoadStatsAsync();
         await LoadEntryAsync();
 
         if (ForceStart)
@@ -415,5 +419,17 @@
         PendingQuillHtml = null;
 
         ShowSecondary = false;
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        try
+        {
+            Stats = await JournalService.GetStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading stats: {ex.Message}");
+        }
     }
 }

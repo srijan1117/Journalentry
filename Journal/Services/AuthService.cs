@@ -10,7 +10,10 @@ namespace Journal.Services
 
         public bool Login(string username, string password)
         {
-            if (username == "admin" && password == "test")
+            var u = (username ?? string.Empty).Trim();
+            var p = (password ?? string.Empty).Trim();
+
+            if (string.Equals(u, "admin", StringComparison.OrdinalIgnoreCase) && p == "test")
             {
                 IsAuthenticated = true;
                 NotifyAuthStateChanged();

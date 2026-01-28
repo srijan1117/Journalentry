@@ -84,7 +84,7 @@
                 else
                 {
                     <div class="py-3">
-                        <h3 class="h-title mb-2">Your Journal Entries</h3>
+                        <h3 class="h-title mb-2">Your Journal Entry</h3>
                         @if (AllEntries.Count == 0)
                         {
                             <p class="p-muted mb-3">No entries yet.</p>
@@ -93,37 +93,43 @@
                         else
                         {
                             <div class="row-gap">
-                                @foreach (var e in AllEntries)
+                                @if (TodaysEntry!=null)
                                 {
                                     <div class="card-ui">
                                         <div class="card-head">
                                             <div class="d-flex align-items-center gap-2">
-                                                <span class="badge-pill">@e.Date.ToString("D")</span>
-                                                <span class="badge-pill">@($"{e.PrimaryMood?.Emoji} {e.PrimaryMood?.Name}")</span>
+                                                <span class="badge-pill">@TodaysEntry.Date.ToString("D")</span>
+                                                <span class="badge-pill">@($"{TodaysEntry.PrimaryMood?.Emoji} {TodaysEntry.PrimaryMood?.Name}")</span>
                                             </div>
                                         </div>
                                         <div class="card-body">
-                                            <h4 class="h-title m-0">@e.Title</h4>
-                                            @if (e.SecondaryMoods?.Count > 0)
+                                            <h4 class="h-title m-0">@TodaysEntry.Title</h4>
+                                            @if (TodaysEntry.SecondaryMoods?.Count > 0)
                                             {
                                                 <div class="d-flex gap-2 flex-wrap mt-2">
-                                                    @foreach (var sm in e.SecondaryMoods.Take(2))
+                                                    @foreach (var sm in TodaysEntry.SecondaryMoods.Take(2))
                                                     {
                                                         <span class="badge-pill">@($"{sm.Emoji} {sm.Name}")</span>
                                                     }
                                                 </div>
                                             }
                                             <div class="mt-3">
-                                                @if (e.Date.Date == DateTime.Today)
-                                                {
-                                                    <button class="btn-ui btn-ui-primary" type="button" @onclick="() => GoToDate(e.Date)">Edit</button>
-                                                }
-                                                else
-                                                {
-                                                    <button class="btn-ui btn-ui-soft" type="button" @onclick="() => GoToDate(e.Date)">View</button>
-                                                }
+                                                
+                                                    <button class="btn-ui btn-ui-primary" type="button" @onclick="() => GoToDate(TodaysEntry.Date)">Edit</button>
+                                               
                                             </div>
                                         </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="text-center py-4">
+                                        <h3 class="h-title mb-2">No entry for this day</h3>
+                                        
+                                        
+                                            <p class="p-muted mb-3">Start journaling to build your streak.</p>
+                                            <button class="btn-ui btn-ui-primary" type="button" @onclick="CreateEntry">Start Journaling</button>
+                                        
                                     </div>
                                 }
                             </div>
@@ -296,6 +302,12 @@
 }
 @code {
 
+
+
+
+
+
+
     private DateTime CurrentDate = DateTime.Today;
     private JournalEntry? CurrentEntry;
     private JournalStats Stats = new();
@@ -325,6 +337,8 @@
     private List<string> FilterSelectedMoods = new();
     private List<string> FilterSelectedTags = new();
     private bool ShowFilters = false;
+
+    private JournalEntry? TodaysEntry = null;
 
     private string SelectedPrimaryMoodName
     {
@@ -494,6 +508,7 @@
         {
             var all = await JournalService.GetAllEntriesAsync();
             AllEntries = all.OrderByDescending(e => e.Date).ToList();
+            TodaysEntry = AllEntries.Where(e => e.Date.Date == DateTime.Today).FirstOrDefault();
             PageIndex = 0;
         }
         catch (Exception ex)

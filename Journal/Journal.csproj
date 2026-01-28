@@ -61,6 +61,11 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Content Remove="wwwroot\app.js" />
+      <Content Remove="wwwroot\js\theme.js.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.12" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.12">
           <PrivateAssets>all</PrivateAssets>

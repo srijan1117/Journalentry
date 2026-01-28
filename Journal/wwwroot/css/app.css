@@ -9,6 +9,17 @@
     --radius: 14px;
 }
 
+[data-theme="dark"] {
+    --mint: #0f172a;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --bg: #0b1220;
+    --card: #111827;
+    --border: #1f2937;
+    --shadow: 0 6px 20px rgba(0,0,0,0.5);
+    --radius: 14px;
+}
+
 html, body {
     background: var(--bg);
     color: var(--text);

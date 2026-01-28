@@ -2,6 +2,7 @@
 @using Journal.Services
 @inject AuthService AuthService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <nav class="topbar">
     <div class="topbar-inner">
@@ -16,7 +17,7 @@
         </div>
 
         <div class="right">
-            <button class="btn-ui btn-ui-soft" type="button" @onclick="ThemeInfo">
+            <button class="btn-ui btn-ui-soft" type="button" @onclick="ToggleTheme">
                 Change Theme
             </button>
 
@@ -49,7 +50,7 @@
     .brand {
         font-weight: 900;
         font-size: 22px;
-        color: #0f172a;
+        color: var(--text);
         cursor: pointer;
         user-select: none;
     }
@@ -63,7 +64,7 @@
 
     .link {
         text-decoration: none;
-        color: #0f172a;
+        color: var(--text);
         padding: 8px 10px;
         border-radius: 10px;
         font-weight: 700;
@@ -99,9 +100,9 @@
         Navigation.NavigateTo("/");
     }
 
-    private async Task ThemeInfo()
+    private async Task ToggleTheme()
     {
-        await Application.Current?.MainPage?.DisplayAlert("Theme", "Theme toggle will be added later (light/dark).", "OK");
+        await JS.InvokeAsync<string>("toggleTheme");
     }
 
     private void Logout()
